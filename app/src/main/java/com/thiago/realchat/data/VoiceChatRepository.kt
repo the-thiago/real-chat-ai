@@ -90,4 +90,7 @@ class VoiceChatRepository(private val service: OpenAIService = OpenAIService.cre
         }
         return audioFile.absolutePath
     }
+
+    fun isRecording(): Boolean = recorder != null
+    fun currentAmplitude(): Int = recorder?.maxAmplitude ?: 0
 } 

@@ -15,7 +15,9 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
     val uiState: StateFlow<VoiceChatUiState> = _uiState
 
     private var loopJob: kotlinx.coroutines.Job? = null
-    private val RECORD_DURATION_MS = 5000L
+    private val SILENCE_THRESHOLD = 2000 // amplitude
+    private val SILENCE_WINDOW_MS = 1000L
+    private val SAMPLE_INTERVAL_MS = 200L
 
     fun startConversation(context: Context) {
         if (loopJob != null) return // already running
@@ -24,7 +26,21 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
                 // 1. Listen
                 _uiState.value = _uiState.value.copy(isRecording = true, isThinking = false)
                 repository.startRecording(context)
-                kotlinx.coroutines.delay(RECORD_DURATION_MS)
+
+                // wait until user stops speaking using simple VAD
+                var silentDuration = 0L
+                while (true) {
+                    kotlinx.coroutines.delay(SAMPLE_INTERVAL_MS)
+                    val amp = repository.currentAmplitude()
+                    if (amp < SILENCE_THRESHOLD) {
+                        silentDuration += SAMPLE_INTERVAL_MS
+                        if (silentDuration >= SILENCE_WINDOW_MS) {
+                            break
+                        }
+                    } else {
+                        silentDuration = 0L
+                    }
+                }
 
                 _uiState.value = _uiState.value.copy(isRecording = false, isThinking = true)
                 val audioFile = repository.stopRecording()

@@ -1,22 +1,25 @@
 package com.thiago.realchat.data
 
 import com.thiago.realchat.BuildConfig
-import com.google.gson.annotations.SerializedName
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.Part
 
 interface OpenAIService {
     @Multipart
     @POST("v1/audio/transcriptions")
     suspend fun transcribeAudio(
         @Part file: MultipartBody.Part,
-        @Part("model") model: String,
-        @Part("language") language: String = "en"
+        @Part("model") model: RequestBody,
+        @Part("language") language: RequestBody
     ): Response<TranscriptionResponse>
 
     @POST("v1/chat/completions")
@@ -28,7 +31,7 @@ interface OpenAIService {
     companion object {
         fun create(): OpenAIService {
             val logging = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
+                level = HttpLoggingInterceptor.Level.BODY
             }
             val client = OkHttpClient.Builder()
                 .addInterceptor(logging)

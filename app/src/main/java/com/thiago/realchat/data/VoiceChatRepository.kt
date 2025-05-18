@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.util.*
 
@@ -63,10 +64,12 @@ class VoiceChatRepository(private val service: OpenAIService = OpenAIService.cre
     }
 
     private suspend fun transcribe(audioFile: File): String {
-        val mediaType = "audio/m4a".toMediaType()
+        val mediaType = "audio/mp4".toMediaType()
         val body = audioFile.asRequestBody(mediaType)
         val part = MultipartBody.Part.createFormData("file", audioFile.name, body)
-        val response = service.transcribeAudio(part, model = "whisper-1")
+        val modelBody = "whisper-1".toRequestBody("text/plain".toMediaType())
+        val langBody = "en".toRequestBody("text/plain".toMediaType())
+        val response = service.transcribeAudio(part, modelBody, langBody)
         return response.body()?.text ?: ""
     }
 

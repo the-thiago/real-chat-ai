@@ -23,6 +23,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.thiago.realchat.ui.theme.RealChatTheme
 import com.thiago.realchat.ui.YarnBallVisualizer
 import com.thiago.realchat.ui.WaveformVisualizer
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,16 +111,38 @@ fun VoiceChatScreen(viewModel: VoiceChatViewModel = viewModel()) {
 
 @Composable
 private fun VisualizerScreen(uiState: VoiceChatUiState) {
+    // Smooth transition factor: 0f (user/yarn) -> 1f (AI/wave)
+    val progress by animateFloatAsState(
+        targetValue = if (uiState.isAiSpeaking) 1f else 0f,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "visualTransition"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (uiState.isAiSpeaking) {
-            WaveformVisualizer(amplitude = uiState.aiAmplitude)
-        } else {
-            YarnBallVisualizer(isRecording = uiState.isRecording, amplitude = uiState.userAmplitude)
-        }
+        // Yarn Ball fades out & scales down as progress increases
+        YarnBallVisualizer(
+            isRecording = uiState.isRecording,
+            amplitude = uiState.userAmplitude,
+            modifier = Modifier.graphicsLayer {
+                alpha = 1f - progress
+                scaleX = 1f - 0.2f * progress
+                scaleY = 1f - 0.2f * progress
+            }
+        )
+
+        // Waveform fades in & scales up as progress increases
+        WaveformVisualizer(
+            amplitude = uiState.aiAmplitude,
+            modifier = Modifier.graphicsLayer {
+                alpha = progress
+                scaleX = 0.8f + 0.2f * progress
+                scaleY = 0.8f + 0.2f * progress
+            }
+        )
 
         // Display thin progress bar for thinking state
         if (uiState.isThinking) {

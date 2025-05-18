@@ -18,6 +18,7 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
     private val SILENCE_THRESHOLD = 2000 // amplitude
     private val SILENCE_WINDOW_MS = 1000L
     private val SAMPLE_INTERVAL_MS = 200L
+    private val MIN_VOICE_DURATION_MS = 500L // must speak at least this long above threshold
 
     fun startConversation(context: Context) {
         if (loopJob != null) return // already running
@@ -27,32 +28,45 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
                 _uiState.value = _uiState.value.copy(isRecording = true, isThinking = false)
                 repository.startRecording(context)
 
-                // wait until user stops speaking using simple VAD
+                // Wait until user stops speaking using simple VAD
                 var silentDuration = 0L
+                var voiceDuration = 0L
+                var hasSpoken = false
                 while (true) {
                     kotlinx.coroutines.delay(SAMPLE_INTERVAL_MS)
                     val amp = repository.currentAmplitude()
-                    if (amp < SILENCE_THRESHOLD) {
-                        silentDuration += SAMPLE_INTERVAL_MS
-                        if (silentDuration >= SILENCE_WINDOW_MS) {
-                            break
-                        }
-                    } else {
+                    if (amp >= SILENCE_THRESHOLD) {
+                        hasSpoken = true
+                        voiceDuration += SAMPLE_INTERVAL_MS
                         silentDuration = 0L
+                    } else {
+                        silentDuration += SAMPLE_INTERVAL_MS
+                        if (hasSpoken && silentDuration >= SILENCE_WINDOW_MS) {
+                            break // user finished speaking
+                        }
                     }
                 }
 
                 _uiState.value = _uiState.value.copy(isRecording = false, isThinking = true)
                 val audioFile = repository.stopRecording()
 
-                if (audioFile != null) {
+                val spokeEnough = voiceDuration >= MIN_VOICE_DURATION_MS
+
+                if (audioFile != null && spokeEnough) {
                     // 2. Send to OpenAI (transcribe, chat, tts)
                     val (userText, aiText, aiAudio) = repository.processUserAudio(context, audioFile)
-                    addMessage(userText, Sender.USER)
-                    addMessage(aiText, Sender.AI)
 
-                    // 3. Speak
-                    aiAudio?.let { playAudioSuspending(context, it) }
+                    // Skip if transcription is blank (failsafe)
+                    if (userText.isNotBlank()) {
+                        addMessage(userText, Sender.USER)
+                        addMessage(aiText, Sender.AI)
+
+                        // 3. Speak
+                        aiAudio?.let { playAudioSuspending(context, it) }
+                    }
+                } else {
+                    // Not enough speech; ignore this recording
+                    audioFile?.delete()
                 }
 
                 _uiState.value = _uiState.value.copy(isThinking = false)

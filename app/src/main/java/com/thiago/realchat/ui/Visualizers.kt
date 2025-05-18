@@ -83,7 +83,7 @@ fun YarnBallVisualizer(
             center = center
         )
 
-        val lines = 4 // more threads for a fuller ball
+        val lines = 6 // more threads for a fuller ball
         for (i in 0 until lines) {
             val angleDeg = rotation + rotationOffset + i * 360f / lines
             val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()

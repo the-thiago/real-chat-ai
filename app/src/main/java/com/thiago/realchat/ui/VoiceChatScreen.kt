@@ -5,8 +5,6 @@ import android.media.MediaPlayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,23 +28,20 @@ fun VoiceChatScreen(viewModel: VoiceChatViewModel = viewModel()) {
         // Permission launcher for microphone
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                viewModel.onMicButtonClicked(context)
+                viewModel.startConversation(context)
             }
         }
 
-        Scaffold(
-            floatingActionButton = {
-                FloatingActionButton(onClick = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        viewModel.onMicButtonClicked(context)
-                    } else {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                }) {
-                    Icon(Icons.Default.Mic, contentDescription = "Record")
-                }
+        // Kick off conversation once permission is granted
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                viewModel.startConversation(context)
+            } else {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
-        ) { padding ->
+        }
+
+        Scaffold { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -60,8 +55,9 @@ fun VoiceChatScreen(viewModel: VoiceChatViewModel = viewModel()) {
                         MessageBubble(message)
                     }
                 }
-                if (uiState.isRecording) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                when {
+                    uiState.isRecording -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    uiState.isThinking   -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
         }

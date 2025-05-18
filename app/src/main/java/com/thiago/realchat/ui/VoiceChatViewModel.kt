@@ -14,33 +14,32 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
     private val _uiState = MutableStateFlow(VoiceChatUiState())
     val uiState: StateFlow<VoiceChatUiState> = _uiState
 
-    fun onMicButtonClicked(context: Context) {
-        val state = _uiState.value
-        if (state.isRecording) {
-            stopRecording(context)
-        } else {
-            startRecording(context)
-        }
-    }
+    private var loopJob: kotlinx.coroutines.Job? = null
+    private val RECORD_DURATION_MS = 5000L
 
-    private fun startRecording(context: Context) {
-        _uiState.value = _uiState.value.copy(isRecording = true)
-        repository.startRecording(context)
-    }
+    fun startConversation(context: Context) {
+        if (loopJob != null) return // already running
+        loopJob = viewModelScope.launch {
+            while (true) {
+                // 1. Listen
+                _uiState.value = _uiState.value.copy(isRecording = true, isThinking = false)
+                repository.startRecording(context)
+                kotlinx.coroutines.delay(RECORD_DURATION_MS)
 
-    private fun stopRecording(context: Context) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isRecording = false)
-            val audioFile = repository.stopRecording()
-            if (audioFile != null) {
-                // Transcribe -> Chat -> Speech
-                val (userText, aiText, aiAudio) = repository.processUserAudio(context, audioFile)
-                addMessage(userText, Sender.USER)
-                addMessage(aiText, Sender.AI)
-                // Play audio reply
-                aiAudio?.let {
-                    playAudio(context, it)
+                _uiState.value = _uiState.value.copy(isRecording = false, isThinking = true)
+                val audioFile = repository.stopRecording()
+
+                if (audioFile != null) {
+                    // 2. Send to OpenAI (transcribe, chat, tts)
+                    val (userText, aiText, aiAudio) = repository.processUserAudio(context, audioFile)
+                    addMessage(userText, Sender.USER)
+                    addMessage(aiText, Sender.AI)
+
+                    // 3. Speak
+                    aiAudio?.let { playAudioSuspending(context, it) }
                 }
+
+                _uiState.value = _uiState.value.copy(isThinking = false)
             }
         }
     }
@@ -49,22 +48,33 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
         _uiState.value = _uiState.value.copy(messages = listOf(ChatMessage(text, sender)) + _uiState.value.messages)
     }
 
-    private fun playAudio(context: Context, filePath: String) {
-        try {
-            val player = MediaPlayer().apply {
-                setDataSource(filePath)
-                prepare()
-                start()
+    private suspend fun playAudioSuspending(context: Context, filePath: String) {
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            try {
+                val player = MediaPlayer().apply {
+                    setDataSource(filePath)
+                    prepare()
+                    start()
+                }
+                player.setOnCompletionListener {
+                    it.release()
+                    if (cont.isActive) cont.resume(Unit) {}
+                }
+                cont.invokeOnCancellation {
+                    try { player.stop() } catch (_: Exception) {}
+                    player.release()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (cont.isActive) cont.resume(Unit) {}
             }
-            player.setOnCompletionListener { player.release() }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 }
 
 data class VoiceChatUiState(
     val isRecording: Boolean = false,
+    val isThinking: Boolean = false,
     val messages: List<ChatMessage> = emptyList()
 )
 

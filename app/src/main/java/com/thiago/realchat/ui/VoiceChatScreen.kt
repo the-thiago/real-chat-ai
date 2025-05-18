@@ -8,19 +8,21 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.thiago.realchat.ui.theme.RealChatTheme
+import com.thiago.realchat.ui.YarnBallVisualizer
+import com.thiago.realchat.ui.WaveformVisualizer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,8 +71,8 @@ fun VoiceChatScreen(viewModel: VoiceChatViewModel = viewModel()) {
         // UI
         when {
             hasMicPermission -> {
-                // Main conversation UI
-                ConversationScaffold(uiState)
+                // Main conversation UI with visualizer
+                VisualizerScreen(uiState)
             }
             showRationale -> {
                 // Show rationale dialog explaining why we need the permission
@@ -104,25 +106,25 @@ fun VoiceChatScreen(viewModel: VoiceChatViewModel = viewModel()) {
 }
 
 @Composable
-private fun ConversationScaffold(uiState: VoiceChatUiState) {
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                reverseLayout = true
-            ) {
-                items(uiState.messages) { message ->
-                    MessageBubble(message)
-                }
-            }
-            when {
-                uiState.isRecording -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                uiState.isThinking -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
+private fun VisualizerScreen(uiState: VoiceChatUiState) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        if (uiState.isAiSpeaking) {
+            WaveformVisualizer(amplitude = uiState.aiAmplitude)
+        } else {
+            YarnBallVisualizer(isRecording = uiState.isRecording, amplitude = uiState.userAmplitude)
+        }
+
+        // Display thin progress bar for thinking state
+        if (uiState.isThinking) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+            )
         }
     }
 }
@@ -178,27 +180,6 @@ private fun PermissionPermanentlyDeniedScreen(onOpenSettings: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onOpenSettings) {
             Text("Open Settings")
-        }
-    }
-}
-
-@Composable
-private fun MessageBubble(message: ChatMessage) {
-    val alignment = if (message.sender == Sender.USER) Alignment.End else Alignment.Start
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        horizontalArrangement = if (alignment == Alignment.End) Arrangement.End else Arrangement.Start
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = if (message.sender == Sender.USER) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-        ) {
-            Text(
-                text = message.text,
-                modifier = Modifier.padding(8.dp)
-            )
         }
     }
 } 

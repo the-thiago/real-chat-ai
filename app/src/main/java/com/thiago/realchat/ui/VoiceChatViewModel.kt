@@ -35,6 +35,8 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
                 while (true) {
                     kotlinx.coroutines.delay(SAMPLE_INTERVAL_MS)
                     val amp = repository.currentAmplitude()
+                    val normAmp = (amp / 32767f).coerceIn(0f, 1f)
+                    _uiState.value = _uiState.value.copy(userAmplitude = normAmp)
                     if (amp >= SILENCE_THRESHOLD) {
                         hasSpoken = true
                         voiceDuration += SAMPLE_INTERVAL_MS
@@ -47,7 +49,7 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
                     }
                 }
 
-                _uiState.value = _uiState.value.copy(isRecording = false, isThinking = true)
+                _uiState.value = _uiState.value.copy(isRecording = false, isThinking = true, userAmplitude = 0f)
                 val audioFile = repository.stopRecording()
 
                 val spokeEnough = voiceDuration >= MIN_VOICE_DURATION_MS
@@ -86,16 +88,35 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
                     prepare()
                     start()
                 }
+
+                // Mark AI speaking in UI
+                _uiState.value = _uiState.value.copy(isAiSpeaking = true)
+
+                // Launch a coroutine to generate fake amplitude values while playing
+                val ampJob = viewModelScope.launch {
+                    val rnd = java.util.Random()
+                    while (player.isPlaying) {
+                        val amp = rnd.nextFloat() // 0..1
+                        _uiState.value = _uiState.value.copy(aiAmplitude = amp)
+                        kotlinx.coroutines.delay(50)
+                    }
+                }
+
                 player.setOnCompletionListener {
                     it.release()
+                    ampJob.cancel()
+                    _uiState.value = _uiState.value.copy(isAiSpeaking = false, aiAmplitude = 0f)
                     if (cont.isActive) cont.resume(Unit) {}
                 }
                 cont.invokeOnCancellation {
+                    ampJob.cancel()
                     try { player.stop() } catch (_: Exception) {}
                     player.release()
+                    _uiState.value = _uiState.value.copy(isAiSpeaking = false, aiAmplitude = 0f)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                _uiState.value = _uiState.value.copy(isAiSpeaking = false, aiAmplitude = 0f)
                 if (cont.isActive) cont.resume(Unit) {}
             }
         }
@@ -105,6 +126,9 @@ class VoiceChatViewModel(private val repository: VoiceChatRepository = VoiceChat
 data class VoiceChatUiState(
     val isRecording: Boolean = false,
     val isThinking: Boolean = false,
+    val isAiSpeaking: Boolean = false,
+    val aiAmplitude: Float = 0f,
+    val userAmplitude: Float = 0f,
     val messages: List<ChatMessage> = emptyList()
 )
 

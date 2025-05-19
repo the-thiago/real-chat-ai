@@ -1,4 +1,4 @@
-IMPORNTANT: This project was created as subproject of ChatJump, find the complete app at https://github.com/the-thiago/chat-jump
+IMPORTANT: This project was created as subproject of ChatJump, find the complete app at https://github.com/the-thiago/chat-jump
 
 # RealChat – Voice-First AI Chat for Android
 

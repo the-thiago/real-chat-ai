@@ -1,3 +1,5 @@
+IMPORNTANT: This project was created as subproject of ChatJump, find the complete app at https://github.com/the-thiago/chat-jump
+
 # RealChat – Voice-First AI Chat for Android
 
 RealChat is a modern Android application that lets you hold **hands-free, back-and-forth conversations** with OpenAI's GPT models.  Speak naturally, see real-time audio visualisations, and hear the assistant reply with realistic speech.
